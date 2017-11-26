@@ -1,0 +1,135 @@
+\documentclass[a4paper,UTF8]{article}
+\usepackage{ctex}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bm}
+\usepackage{algorithm}  
+\usepackage{algorithmic}  
+%\usepackage[thmmarks, amsmath, thref]{ntheorem}
+\theoremstyle{definition}
+\newtheorem*{solution}{Solution}
+\newtheorem*{prove}{Proof}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{enumerate}
+\renewcommand\refname{参考文献}
+
+%--
+
+%--
+\begin{document}
+\title{实验1. 度量学习实验报告}
+\author{MF1733037，刘鑫鑫，\url{liuxx@lamda.nju.edu.cn}}
+\maketitle
+
+\section*{综述}
+度量学习用于学习一个度量样本间距离的距离函数。以马氏距离为例:
+\begin{equation}\label{mah}
+dist^2_{mah}(\bm x_i,\bm x_j)=(\bm x_i-\bm x_j)^T\bm M(\bm x_i-\bm x_j)
+\end{equation}
+其中$\bm x_i,\bm x_j$是两个样本，$dist_{mah}(\bm x_i,\bm x_j)$则是这两个样本间的距离。对马氏距离的度量学习实际上就是学习矩阵$\bm M$。对$\bm M$的学习往往可以将其嵌入到某些分类器中。如近邻成分分析(Neighbourhood Component Analysis,NCA)就是将其嵌入到近邻分类器中。
+
+\section*{任务1}
+	\subsection*{度量函数学习目标}
+		在任务1中使用近邻成分分析法。其优化目标为:
+\begin{equation}
+P = \mathop{\arg\min}_P 1-\sum^m_{i=1}\sum_{j\in\Omega_i}\frac{exp(-dist^2_{mah}(\bm x_i,\bm x_j))}{\sum_l exp(-dist^2_{mah}(\bm x_i,\bm x_l))}
+\end{equation}
+其中$\Omega_i$表示和样本$\bm x_i$标签一致的样本集合。考虑到矩阵$\bm M$是半正定对称矩阵，即存在矩阵$\bm P$使得$\bm M=\bm P^T\bm P$，于是优化目标可以写为：
+\begin{equation}\label{opt-obj}
+P = \mathop{\arg\min}_P 1-\sum^m_{i=1}\sum_{j\in\Omega_i}\frac{exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_j\Vert_2^2)}{\sum_l exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_l\Vert_2^2)}
+\end{equation}
+	\subsection*{优化算法}
+对于式（\ref{opt-obj}）所示的优化目标，可以采用随机梯度下降法。\\
+
+设数据集为$D=\{(\bm x_1,y_1),(\bm x_2,y_2),\ldots,(\bm x_n,y_n)\}$。即对每个样本$\bm x_i$，设其标签为$y_i$。那么对于样本$\bm x_i$，我们要去最小化如下函数：
+\begin{equation}
+f(\bm x_i) = - \sum_{j\in\Omega_i}\frac{exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_j\Vert_2^2)}{\sum_l exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_l\Vert_2^2)}
+\end{equation}
+该函数是可导的，求出其对参数矩阵$\bm P$的导函数为：
+\begin{equation}
+\frac{\partial f}{\partial\bm P}=-2\bm P(p_i\sum_k p_{ik}\bm x_{ik}\bm x_{ik}^T-\sum_{j\in\Omega_i}p_{ij}\bm x_{ij}\bm x_{ij}^T)
+\end{equation}
+其中：
+\[
+p_{ij}=\frac{exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_j\Vert_2^2)}{\sum_l exp(-\Vert\bm P^T\bm x_i-\bm P^T\bm x_l\Vert_2^2)}
+\]
+\[
+p_i=\sum_{j\in\Omega_i}p_{ij}
+\]
+\[
+\bm x_{ij} = \bm x_i-\bm x_j
+\]
+接下来，就可以应用随机梯度下降法来优化NCA的目标式（\ref{opt-obj}）了：
+\begin{algorithm}
+\caption{SGD for NCA}
+\textbf{Input:}\\ 
+DataSet $D=\{(\bm x_1,y_1),(\bm x_2,y_2),\ldots,(\bm x_n,y_n)\}$\\
+learning rate for SGD: lr\\
+maximum iteration for SGD:max\_iter\\
+\textbf{Output:} Matrix $\bm P$
+
+\begin{algorithmic}[1]
+\STATE initialize $\bm P$
+\STATE initialize max\_iter
+\FOR{$iter \in (1:max\_iter)$}
+\STATE i = iter\% n
+\STATE calculate $\frac{\partial f}{\partial\bm P}$
+\STATE update $\bm P$: $P\leftarrow P-lr*\frac{\partial f}{\partial\bm P}$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+具体代码见附件中myDML.py。其中myDML.train()函数用于训练样本，myDML.distance()函数用于计算样本间距离。使用时注意要先训练样本再调用距离函数，否则会出现错误。主要的矩阵运算均调用numpy包里的相关函数。
+
+对于任务1数据集，笔者推荐的超参数为$lr = 0.01,max\_iter=20000$。
+
+\section*{任务2}
+在该任务中，笔者仍然使用任务1中的NCA方法去训练样本并计算距离，优化方法也是SGD。在设定合适的超参数后，该方法错误率低于欧几里得距离的错误率约$6\% - 8\%$。具体测试结果见附件evaluation.txt
+
+对于任务2数据集，笔者推荐的超参数为$lr=0.005,max\_iter=182000$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{document}
